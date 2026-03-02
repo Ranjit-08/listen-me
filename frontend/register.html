@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create Account – AURA</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="bg-ambient"></div>
+
+  <div class="auth-page">
+    <!-- Step 1: Register form -->
+    <div class="auth-card" id="stepRegister">
+      <div class="auth-logo"><a href="home.html">AURA</a></div>
+      <h1 class="auth-title">Create Account</h1>
+      <p class="auth-subtitle">Join the AURA music experience</p>
+
+      <div class="alert alert-error" id="regError">
+        <span>⚠</span><span id="regErrorMsg"></span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Full Name</label>
+        <input type="text" id="fullName" class="form-input" placeholder="Your full name" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <input type="email" id="email" class="form-input" placeholder="you@example.com" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <div class="input-wrapper">
+          <input type="password" id="password" class="form-input" placeholder="Min. 8 characters" />
+          <span class="input-icon" onclick="togglePass('password',this)">👁</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirm Password</label>
+        <div class="input-wrapper">
+          <input type="password" id="confirmPassword" class="form-input" placeholder="Repeat your password" />
+          <span class="input-icon" onclick="togglePass('confirmPassword',this)">👁</span>
+        </div>
+      </div>
+
+      <button class="btn btn-primary w-full" id="sendOtpBtn" onclick="sendOtp()">Send Verification Code</button>
+      <p class="auth-footer">Already have an account? <a href="login.html">Sign in</a></p>
+    </div>
+
+    <!-- Step 2: OTP verification -->
+    <div class="auth-card" id="stepOtp" style="display:none;">
+      <div class="auth-logo"><a href="home.html">AURA</a></div>
+      <h1 class="auth-title">Verify Email</h1>
+      <p class="auth-subtitle" id="otpSubtitle">Enter the 6-digit code sent to your email</p>
+
+      <div class="alert alert-error"   id="otpError"><span>⚠</span><span id="otpErrorMsg"></span></div>
+      <div class="alert alert-success" id="otpSuccess"><span>✓</span><span>Code sent! Check your inbox.</span></div>
+
+      <div class="otp-group">
+        <input class="otp-input" type="text" maxlength="1" id="o0" />
+        <input class="otp-input" type="text" maxlength="1" id="o1" />
+        <input class="otp-input" type="text" maxlength="1" id="o2" />
+        <input class="otp-input" type="text" maxlength="1" id="o3" />
+        <input class="otp-input" type="text" maxlength="1" id="o4" />
+        <input class="otp-input" type="text" maxlength="1" id="o5" />
+      </div>
+
+      <button class="btn btn-primary w-full" onclick="verifyOtp()">Verify &amp; Create Account</button>
+      <div class="auth-footer" style="margin-top:16px;">
+        <span id="resendTimer">Resend in <span id="countdown">60</span>s</span>
+        <a href="#" id="resendLink" style="display:none;" onclick="sendOtp(true)">Resend Code</a>
+        &nbsp;·&nbsp;
+        <a href="#" onclick="document.getElementById('stepOtp').style.display='none';document.getElementById('stepRegister').style.display='block';">Back</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script>
+    function togglePass(id, el) {
+      const inp = document.getElementById(id);
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+      el.textContent = inp.type === 'password' ? '👁' : '🙈';
+    }
+
+    let timer;
+    function startCountdown() {
+      let t = 60;
+      document.getElementById('resendTimer').style.display = 'inline';
+      document.getElementById('resendLink').style.display  = 'none';
+      timer = setInterval(() => {
+        document.getElementById('countdown').textContent = --t;
+        if (t <= 0) {
+          clearInterval(timer);
+          document.getElementById('resendTimer').style.display = 'none';
+          document.getElementById('resendLink').style.display  = 'inline';
+        }
+      }, 1000);
+    }
+
+    document.querySelectorAll('.otp-input').forEach((inp, i, all) => {
+      inp.addEventListener('input',   e => { if (e.target.value && i < all.length-1) all[i+1].focus(); });
+      inp.addEventListener('keydown', e => { if (e.key==='Backspace' && !e.target.value && i>0) all[i-1].focus(); });
+    });
+
+    async function sendOtp(resend = false) {
+      document.getElementById('regError').classList.remove('show');
+      const name  = document.getElementById('fullName').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const pw    = document.getElementById('password').value;
+      const cpw   = document.getElementById('confirmPassword').value;
+
+      if (!resend) {
+        if (!name||!email||!pw||!cpw) return showErr('regError','regErrorMsg','All fields are required.');
+        if (pw.length < 8)            return showErr('regError','regErrorMsg','Password must be at least 8 characters.');
+        if (pw !== cpw)               return showErr('regError','regErrorMsg','Passwords do not match.');
+      }
+
+      const btn = document.getElementById('sendOtpBtn');
+      btn.disabled = true; btn.textContent = 'Sending...';
+      try {
+        const res = await API.post('/auth/send-otp', { name, email });
+        if (res.success) {
+          document.getElementById('stepRegister').style.display = 'none';
+          document.getElementById('stepOtp').style.display      = 'block';
+          document.getElementById('otpSubtitle').textContent    = `Code sent to ${email}`;
+          document.getElementById('otpSuccess').classList.add('show');
+          startCountdown();
+        } else {
+          showErr('regError','regErrorMsg', res.message || 'Failed to send code.');
+        }
+      } catch(e) { showErr('regError','regErrorMsg','Network error.'); }
+      btn.disabled = false; btn.textContent = 'Send Verification Code';
+    }
+
+    async function verifyOtp() {
+      document.getElementById('otpError').classList.remove('show');
+      const code = [0,1,2,3,4,5].map(i => document.getElementById('o'+i).value).join('');
+      if (code.length < 6) return showErr('otpError','otpErrorMsg','Enter all 6 digits.');
+      const name     = document.getElementById('fullName').value.trim();
+      const email    = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      try {
+        const res = await API.post('/auth/register', { name, email, password, otp: code });
+        if (res.success) {
+          localStorage.setItem('aura_token', res.token);
+          localStorage.setItem('aura_user',  JSON.stringify(res.user));
+          window.location.href = 'dashboard.html';
+        } else { showErr('otpError','otpErrorMsg', res.message || 'Invalid code.'); }
+      } catch(e) { showErr('otpError','otpErrorMsg','Network error.'); }
+    }
+
+    function showErr(alertId, msgId, msg) {
+      document.getElementById(msgId).textContent = msg;
+      document.getElementById(alertId).classList.add('show');
+    }
+  </script>
+</body>
+</html>

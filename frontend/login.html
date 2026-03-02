@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign In – AURA</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="bg-ambient"></div>
+
+  <div class="auth-page">
+    <div class="auth-card">
+      <div class="auth-logo"><a href="home.html">AURA</a></div>
+      <h1 class="auth-title">Welcome Back</h1>
+      <p class="auth-subtitle">Sign in to continue your journey</p>
+
+      <div class="alert alert-error" id="loginError">
+        <span>⚠</span><span id="loginErrorMsg">Invalid email or password.</span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <input type="email" id="email" class="form-input" placeholder="you@example.com" onkeydown="if(event.key==='Enter')login()" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <div class="input-wrapper">
+          <input type="password" id="password" class="form-input" placeholder="Your password" onkeydown="if(event.key==='Enter')login()" />
+          <span class="input-icon" onclick="togglePass()">👁</span>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center" style="margin-bottom:24px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-muted);">
+          <input type="checkbox" id="remember" style="accent-color:var(--gold);"> Remember me
+        </label>
+        <a href="forgot-password.html" style="font-size:12px;color:var(--gold);text-decoration:none;">Forgot password?</a>
+      </div>
+
+      <button class="btn btn-primary w-full" id="loginBtn" onclick="login()">Sign In</button>
+      <p class="auth-footer">Don't have an account? <a href="register.html">Create one</a></p>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script>
+    if (localStorage.getItem('aura_token') || sessionStorage.getItem('aura_token'))
+      window.location.href = 'dashboard.html';
+
+    function togglePass() {
+      const inp = document.getElementById('password');
+      const icon = document.querySelector('.input-icon');
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+      icon.textContent = inp.type === 'password' ? '👁' : '🙈';
+    }
+
+    async function login() {
+      document.getElementById('loginError').classList.remove('show');
+      const email    = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const remember = document.getElementById('remember').checked;
+
+      if (!email || !password) {
+        document.getElementById('loginErrorMsg').textContent = 'Please fill in all fields.';
+        document.getElementById('loginError').classList.add('show');
+        return;
+      }
+
+      const btn = document.getElementById('loginBtn');
+      btn.disabled = true; btn.textContent = 'Signing in...';
+
+      try {
+        const res = await API.post('/auth/login', { email, password });
+        if (res.success) {
+          const storage = remember ? localStorage : sessionStorage;
+          storage.setItem('aura_token', res.token);
+          localStorage.setItem('aura_user', JSON.stringify(res.user));
+          window.location.href = res.user.role === 'admin' ? 'admin.html' : 'dashboard.html';
+        } else {
+          document.getElementById('loginErrorMsg').textContent = res.message || 'Invalid credentials.';
+          document.getElementById('loginError').classList.add('show');
+          document.getElementById('password').classList.add('error');
+          setTimeout(() => document.getElementById('password').classList.remove('error'), 2000);
+        }
+      } catch(e) {
+        document.getElementById('loginErrorMsg').textContent = 'Network error. Please try again.';
+        document.getElementById('loginError').classList.add('show');
+      }
+      btn.disabled = false; btn.textContent = 'Sign In';
+    }
+  </script>
+</body>
+</html>

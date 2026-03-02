@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AURA – Dashboard</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    body { padding-bottom:100px; }
+    .sidebar {
+      width:240px; min-width:240px; background:rgba(5,5,10,0.9);
+      border-right:1px solid var(--border); padding:90px 0 20px;
+      position:fixed; left:0; top:0; bottom:0; overflow-y:auto; z-index:100; backdrop-filter:blur(20px);
+    }
+    .sidebar-logo { font-family:var(--font-serif); font-size:24px; letter-spacing:8px; color:var(--gold); text-decoration:none; padding:0 24px 30px; display:block; text-indent:8px; }
+    .sidebar-nav { list-style:none; }
+    .sidebar-nav li a { display:flex; align-items:center; gap:12px; padding:12px 24px; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-muted); text-decoration:none; transition:all 0.2s; border-left:2px solid transparent; }
+    .sidebar-nav li a:hover, .sidebar-nav li a.active { color:var(--text-primary); border-left-color:var(--gold); background:rgba(201,168,76,0.05); }
+    .sidebar-nav li a.active { color:var(--gold); }
+    .sidebar-section { font-size:9px; letter-spacing:3px; text-transform:uppercase; color:var(--text-subtle); padding:20px 24px 8px; }
+    .content { margin-left:240px; flex:1; padding:100px 40px 40px; }
+    .welcome { margin-bottom:48px; }
+    .welcome h1 { font-size:38px; font-weight:300; margin-bottom:6px; }
+    .welcome p { font-size:13px; color:var(--text-muted); }
+    .artist-row { display:flex; gap:16px; overflow-x:auto; padding-bottom:10px; scrollbar-width:none; }
+    .artist-row::-webkit-scrollbar { display:none; }
+    .artist-chip { flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:8px; cursor:pointer; text-align:center; padding:4px; border-radius:12px; transition:transform 0.2s; }
+    .artist-chip:hover { transform:translateY(-3px); }
+    .artist-chip img { width:70px; height:70px; border-radius:50%; object-fit:cover; border:2px solid transparent; transition:border-color 0.2s; }
+    .artist-chip.active img, .artist-chip:hover img { border-color:var(--gold); }
+    .artist-chip span { font-size:11px; color:var(--text-muted); white-space:nowrap; max-width:80px; overflow:hidden; text-overflow:ellipsis; }
+    .artist-chip.active span { color:var(--gold); }
+    .all-btn { width:70px; height:70px; border-radius:50%; background:var(--glass); border:2px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:20px; transition:border-color 0.2s; }
+    .artist-chip.active .all-btn, .artist-chip:hover .all-btn { border-color:var(--gold); }
+    .top-controls { display:flex; gap:12px; align-items:center; margin-bottom:24px; flex-wrap:wrap; }
+    .empty-state { text-align:center; padding:80px 20px; color:var(--text-muted); }
+    .empty-state h3 { font-family:var(--font-serif); font-size:24px; font-weight:300; margin-bottom:8px; }
+    @media(max-width:768px) { .sidebar{display:none;} .content{margin-left:0;padding:80px 16px 16px;} }
+  </style>
+</head>
+<body>
+  <div class="bg-ambient"></div>
+
+  <aside class="sidebar">
+    <a href="dashboard.html" class="sidebar-logo">AURA</a>
+    <ul class="sidebar-nav" id="sidebarNav">
+      <li><a href="dashboard.html" class="active"><span>🏠</span> &nbsp;Home</a></li>
+      <li><a href="dashboard.html#artists"><span>🎤</span> &nbsp;Artists</a></li>
+      <li><a href="dashboard.html#all-songs"><span>🎵</span> &nbsp;All Songs</a></li>
+      <div class="sidebar-section">Account</div>
+      <li><a href="#" onclick="logout()"><span>🚪</span> &nbsp;Sign Out</a></li>
+    </ul>
+  </aside>
+
+  <main class="content">
+    <div class="welcome">
+      <h1 class="serif">Good <span id="greeting">Evening</span>, <span id="userName" class="gold-text">Listener</span></h1>
+      <p>What would you like to hear today?</p>
+    </div>
+
+    <section class="section" id="artists">
+      <div class="section-header">
+        <h2 class="section-title">Artists</h2>
+      </div>
+      <div class="artist-row" id="artistRow">
+        <div class="artist-chip active" data-artist="all" onclick="filterByArtist('all',this)">
+          <div class="all-btn">✨</div>
+          <span>All</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="all-songs">
+      <div class="section-header">
+        <h2 class="section-title" id="songsHeader">All Songs</h2>
+      </div>
+      <div class="top-controls">
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" placeholder="Search songs..." id="searchInput" oninput="filterSongs()" />
+        </div>
+      </div>
+      <div class="songs-grid" id="songsGrid"></div>
+      <div class="empty-state" id="emptyState" style="display:none;">
+        <div style="font-size:48px;margin-bottom:16px;">🎵</div>
+        <h3>No songs found</h3>
+        <p>Try a different search or browse by artist</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Player Bar -->
+  <div class="player-bar" id="playerBar">
+    <div class="player-track-info">
+      <img class="player-thumb" id="playerThumb" src="" alt="" style="display:none;" />
+      <div>
+        <div class="player-track-name" id="playerTitle">—</div>
+        <div class="player-artist-name" id="playerArtist">—</div>
+      </div>
+    </div>
+    <div class="player-controls">
+      <div class="player-buttons">
+        <button class="player-btn" onclick="prevSong()">⏮</button>
+        <button class="player-btn play-pause-main" id="playPauseBtn" onclick="togglePlay()">▶</button>
+        <button class="player-btn" onclick="nextSong()">⏭</button>
+      </div>
+      <div class="progress-wrap">
+        <span class="time-label" id="currentTime">0:00</span>
+        <input type="range" class="progress-bar" id="progressBar" value="0" min="0" max="100" step="0.1" oninput="seekTo(this.value)" />
+        <span class="time-label" id="totalTime">0:00</span>
+      </div>
+    </div>
+    <div class="player-right">
+      <span style="font-size:14px;color:var(--text-muted);">🔊</span>
+      <input type="range" class="volume-slider" id="volumeSlider" value="80" min="0" max="100" oninput="setVolume(this.value)" />
+    </div>
+  </div>
+
+  <audio id="audioEl"></audio>
+
+  <script src="js/api.js"></script>
+  <script src="js/player.js"></script>
+  <script>
+    const token = localStorage.getItem('aura_token') || sessionStorage.getItem('aura_token');
+    if (!token) window.location.href = 'login.html';
+
+    const user = JSON.parse(localStorage.getItem('aura_user') || '{}');
+    if (user.role === 'admin') {
+      document.getElementById('sidebarNav').insertAdjacentHTML('afterbegin',
+        `<li><a href="admin.html"><span>⚙️</span> &nbsp;Admin Panel</a></li>`);
+    }
+
+    const h = new Date().getHours();
+    document.getElementById('greeting').textContent = h<12 ? 'Morning' : h<17 ? 'Afternoon' : 'Evening';
+    document.getElementById('userName').textContent  = (user.name||'Listener').split(' ')[0];
+
+    let allSongs = [], currentArtist = 'all';
+
+    async function loadData() {
+      try {
+        const [songs, artists] = await Promise.all([API.get('/songs'), API.get('/artists')]);
+        allSongs = songs.data || [];
+        renderArtists(artists.data || []);
+        renderSongs(allSongs);
+      } catch(e) { console.error(e); }
+    }
+
+    function renderArtists(artists) {
+      const row = document.getElementById('artistRow');
+      artists.forEach(a => {
+        const chip = document.createElement('div');
+        chip.className = 'artist-chip';
+        chip.dataset.artist = a.id;
+        chip.onclick = () => filterByArtist(a.id, chip);
+        chip.innerHTML = `<img src="${a.photo_url || 'assets/default-artist.png'}" alt="${a.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2270%22 height=%2270%22><rect width=%2270%22 height=%2270%22 rx=%2235%22 fill=%22%23222%22/><text x=%2235%22 y=%2242%22 text-anchor=%22middle%22 font-size=%2224%22>🎤</text></svg>'" /><span>${a.name}</span>`;
+        row.appendChild(chip);
+      });
+    }
+
+    function renderSongs(songs) {
+      const grid  = document.getElementById('songsGrid');
+      const empty = document.getElementById('emptyState');
+      grid.innerHTML = '';
+      if (!songs.length) { empty.style.display='block'; return; }
+      empty.style.display = 'none';
+      songs.forEach((s, i) => {
+        const card = document.createElement('div');
+        card.className = 'card song-card animate-in';
+        card.id = `song-${s.id}`;
+        card.style.animationDelay = (i * 0.04) + 's';
+        card.innerHTML = `
+          <div class="cover-wrap">
+            <img src="${s.thumbnail_url || ''}" alt="${s.title}" loading="lazy" onerror="this.style.background='#1a1a2a'" />
+            <div class="play-overlay"><div class="play-btn-circle">▶</div></div>
+          </div>
+          <div class="song-info">
+            <div class="song-title">${s.title}</div>
+            <div class="song-artist">${s.artist_name}</div>
+          </div>`;
+        card.addEventListener('click', () => playSong(s));
+        grid.appendChild(card);
+      });
+    }
+
+    function filterByArtist(artistId, el) {
+      currentArtist = artistId;
+      document.querySelectorAll('.artist-chip').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+      const filtered = artistId === 'all' ? allSongs : allSongs.filter(s => s.artist_id == artistId);
+      document.getElementById('songsHeader').textContent = artistId === 'all' ? 'All Songs' : el.querySelector('span').textContent + "'s Songs";
+      renderSongs(filtered);
+    }
+
+    function filterSongs() {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      let base = currentArtist === 'all' ? allSongs : allSongs.filter(s => s.artist_id == currentArtist);
+      renderSongs(base.filter(s => s.title.toLowerCase().includes(q) || s.artist_name.toLowerCase().includes(q)));
+    }
+
+    function logout() { localStorage.clear(); sessionStorage.clear(); window.location.href='login.html'; }
+
+    loadData();
+  </script>
+</body>
+</html>

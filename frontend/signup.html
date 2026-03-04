@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create Account — ListenMe</title>
+  <link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+<div class="auth-wrapper">
+  <div class="auth-card">
+
+    <div class="step-indicator">
+      <div class="dot active" id="d1"></div>
+      <div class="dot" id="d2"></div>
+    </div>
+
+    <!-- Step 1: Details -->
+    <div class="step active" id="s1">
+      <div class="auth-logo"><div class="logo-icon">🎧</div>Listen<span>Me</span></div>
+      <p class="auth-subtitle">Create your free account — takes 30 seconds.</p>
+
+      <div class="alert alert-error" id="err1"></div>
+
+      <div class="form-group">
+        <label>Your Name</label>
+        <input type="text" id="name" placeholder="e.g. Alex" autocomplete="name" />
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="email" placeholder="you@example.com" autocomplete="email" />
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <div class="password-wrap">
+          <input type="password" id="password" placeholder="Min. 6 characters" autocomplete="new-password" oninput="checkStrength(this.value)" />
+          <span class="toggle-pw" onclick="togglePw()">👁</span>
+        </div>
+        <div class="strength-bar"><div class="strength-fill" id="sBar"></div></div>
+        <div class="strength-label" id="sLabel"></div>
+      </div>
+
+      <button class="btn btn-primary" id="signupBtn" onclick="doSignup()">
+        <span id="signupText">Continue</span>
+        <div class="spinner" id="signupSpinner"></div>
+      </button>
+
+      <div class="link-row" style="margin-top:22px;">Already have an account? <a href="login.html">Sign in</a></div>
+      <div class="link-row" style="margin-top:10px;"><a href="index.html" style="color:var(--muted);font-size:13px;">← Back to home</a></div>
+    </div>
+
+    <!-- Step 2: OTP -->
+    <div class="step" id="s2">
+      <button class="back-btn" onclick="goBack()">← Back</button>
+      <div class="auth-logo"><div class="logo-icon">📩</div>Check your <span>email</span></div>
+      <p class="auth-subtitle">We sent a 6-digit code to <strong id="sentTo" style="color:var(--text);"></strong></p>
+
+      <div class="alert alert-error"   id="err2"></div>
+      <div class="alert alert-success" id="suc2"></div>
+
+      <div class="otp-group">
+        <input class="otp-digit" type="text" inputmode="numeric" maxlength="1" oninput="oi(this,0)" onkeydown="ok(event,0)" />
+        <input class="otp-digit" type="text" inputmode="numeric" maxlength="1" oninput="oi(this,1)" onkeydown="ok(event,1)" />
+        <input class="otp-digit" type="text" inputmode="numeric" maxlength="1" oninput="oi(this,2)" onkeydown="ok(event,2)" />
+        <input class="otp-digit" type="text" inputmode="numeric" maxlength="1" oninput="oi(this,3)" onkeydown="ok(event,3)" />
+        <input class="otp-digit" type="text" inputmode="numeric" maxlength="1" oninput="oi(this,4)" onkeydown="ok(event,4)" />
+        <input class="otp-digit" type="text" inputmode="numeric" maxlength="1" oninput="oi(this,5)" onkeydown="ok(event,5)" />
+      </div>
+
+      <button class="btn btn-primary" id="verifyBtn" onclick="doVerify()">
+        <span id="verifyText">Verify & Enter</span>
+        <div class="spinner" id="verifySpinner"></div>
+      </button>
+
+      <div class="resend-timer" id="rtimer">Resend in <span id="tick">60</span>s</div>
+      <div class="otp-hint" id="rlink" style="display:none;">
+        Didn't get it? <a onclick="resend()">Resend code</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+if (localStorage.getItem('token')) window.location.href = 'play.html';
+
+const digits = document.querySelectorAll('.otp-digit');
+let userEmail = '';
+
+function togglePw() {
+  const i = document.getElementById('password');
+  const s = document.querySelector('.toggle-pw');
+  i.type = i.type==='password'?'text':'password';
+  s.textContent = i.type==='password'?'👁':'🙈';
+}
+
+function checkStrength(v) {
+  const bar = document.getElementById('sBar');
+  const lbl = document.getElementById('sLabel');
+  let score = 0;
+  if (v.length >= 6)  score++;
+  if (v.length >= 10) score++;
+  if (/[A-Z]/.test(v) && /[0-9]/.test(v)) score++;
+  if (/[^A-Za-z0-9]/.test(v)) score++;
+  const map = [
+    {w:'0%',  c:'transparent', t:''},
+    {w:'25%', c:'#f43f5e',     t:'Weak'},
+    {w:'50%', c:'#f59e0b',     t:'Fair'},
+    {w:'75%', c:'#10b981',     t:'Good'},
+    {w:'100%',c:'#10b981',     t:'Strong'},
+  ];
+  const s = map[score] || map[0];
+  bar.style.width = s.w; bar.style.background = s.c;
+  lbl.textContent = s.t; lbl.style.color = s.c;
+}
+
+function oi(el, idx) {
+  el.classList.toggle('filled', !!el.value);
+  if (el.value && idx < 5) digits[idx+1].focus();
+  if (getOtp().length === 6) doVerify();
+}
+function ok(e, idx) {
+  if (e.key==='Backspace' && !digits[idx].value && idx>0) {
+    digits[idx-1].focus(); digits[idx-1].classList.remove('filled');
+  }
+}
+function getOtp() { return [...digits].map(d=>d.value).join(''); }
+
+function show(id, msg) {
+  const el=document.getElementById(id);
+  el.textContent=msg; el.style.display='block';
+  el.style.animation='none'; requestAnimationFrame(()=>el.style.animation='');
+}
+function hide(ids) { ids.forEach(id=>document.getElementById(id).style.display='none'); }
+function setLoad(txt, sp, btn, on) {
+  document.getElementById(txt).style.display=on?'none':'inline';
+  document.getElementById(sp).style.display=on?'block':'none';
+  document.getElementById(btn).disabled=on;
+}
+
+async function doSignup() {
+  hide(['err1']);
+  const name=document.getElementById('name').value.trim();
+  const email=document.getElementById('email').value.trim();
+  const password=document.getElementById('password').value;
+  if(!name||!email||!password) return show('err1','All fields are required.');
+  if(password.length<6) return show('err1','Password must be at least 6 characters.');
+  setLoad('signupText','signupSpinner','signupBtn',true);
+  try {
+    await api.post('/auth/signup',{name,email,password},false);
+    userEmail=email;
+    document.getElementById('sentTo').textContent=email;
+    document.getElementById('d2').classList.add('active');
+    document.getElementById('s1').classList.remove('active');
+    document.getElementById('s2').classList.add('active');
+    digits[0].focus();
+    startTimer();
+  } catch(e) {
+    show('err1', e.error||'Signup failed. Please try again.');
+  } finally { setLoad('signupText','signupSpinner','signupBtn',false); }
+}
+
+async function doVerify() {
+  hide(['err2','suc2']);
+  const code=getOtp();
+  if(code.length!==6) return;
+  setLoad('verifyText','verifySpinner','verifyBtn',true);
+  try {
+    const data=await api.post('/auth/verify-email',{email:userEmail,code},false);
+    localStorage.setItem('token',data.token);
+    localStorage.setItem('user',JSON.stringify(data.user));
+    show('suc2','✓ Verified! Taking you in…');
+    setTimeout(()=>window.location.href='play.html',800);
+  } catch(e) {
+    show('err2',e.error||'Invalid code. Please try again.');
+    digits.forEach(d=>{d.value='';d.classList.remove('filled');}); digits[0].focus();
+  } finally { setLoad('verifyText','verifySpinner','verifyBtn',false); }
+}
+
+let timerInt;
+function startTimer() {
+  let t=60;
+  document.getElementById('rtimer').style.display='block';
+  document.getElementById('rlink').style.display='none';
+  timerInt=setInterval(()=>{
+    document.getElementById('tick').textContent=--t;
+    if(t<=0) {
+      clearInterval(timerInt);
+      document.getElementById('rtimer').style.display='none';
+      document.getElementById('rlink').style.display='block';
+    }
+  },1000);
+}
+
+async function resend() {
+  const name=document.getElementById('name').value.trim();
+  const email=document.getElementById('email').value.trim();
+  const password=document.getElementById('password').value;
+  try {
+    await api.post('/auth/signup',{name,email,password},false);
+    digits.forEach(d=>{d.value='';d.classList.remove('filled');}); digits[0].focus();
+    show('suc2','New code sent!');
+    setTimeout(()=>document.getElementById('suc2').style.display='none',3000);
+    startTimer();
+  } catch(e) { show('err2',e.error||'Failed to resend.'); }
+}
+
+function goBack() {
+  clearInterval(timerInt);
+  document.getElementById('s2').classList.remove('active');
+  document.getElementById('s1').classList.add('active');
+  document.getElementById('d2').classList.remove('active');
+}
+</script>
+</body>
+</html>

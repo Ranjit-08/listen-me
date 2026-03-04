@@ -3,65 +3,662 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AURA – Premium Music</title>
-  <link rel="stylesheet" href="css/splash.css" />
+  <title>ListenMe — Your Music World</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800;900&family=DM+Sans:wght@300;400;500;600&family=Bebas+Neue&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #04040c;
+      --card:    rgba(255,255,255,0.03);
+      --border:  rgba(255,255,255,0.07);
+      --primary: #7c3aed;
+      --accent:  #a78bfa;
+      --gold:    #f0a500;
+      --pink:    #e879f9;
+      --text:    #f1f5f9;
+      --muted:   #3d4a5c;
+      --text2:   #94a3b8;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px; overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* grain */
+    body::after {
+      content:''; position:fixed; inset:0; z-index:9999; pointer-events:none;
+      opacity:0.018;
+      background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size:180px;
+    }
+
+    /* ambient glow */
+    body::before {
+      content:''; position:fixed; inset:0; z-index:-1; pointer-events:none;
+      background:
+        radial-gradient(ellipse 55% 40% at 5% 0%, rgba(124,58,237,0.16) 0%,transparent 60%),
+        radial-gradient(ellipse 45% 35% at 95% 95%, rgba(232,121,249,0.09) 0%,transparent 60%),
+        var(--bg);
+    }
+
+    /* ── SPLASH ───────────────────────────────────────────── */
+    #splash {
+      position: fixed; inset: 0; z-index: 10000;
+      background: #04040c;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.76,0,0.24,1);
+    }
+    #splash.exit { opacity: 0; transform: scale(1.05); pointer-events: none; }
+
+    .splash-ring {
+      width: 88px; height: 88px; border-radius: 26px;
+      background: linear-gradient(135deg, #7c3aed, #e879f9);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 42px; margin-bottom: 30px;
+      box-shadow: 0 0 80px rgba(124,58,237,0.55), 0 0 160px rgba(124,58,237,0.18);
+      animation: sRing 0.7s cubic-bezier(0.16,1,0.3,1) both;
+    }
+    @keyframes sRing {
+      from { opacity:0; transform:scale(0.2) rotate(-30deg); }
+      to   { opacity:1; transform:scale(1) rotate(0); }
+    }
+    .splash-name {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 80px; letter-spacing: 8px;
+      background: linear-gradient(135deg,#fff 0%,#a78bfa 55%,#e879f9 100%);
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+      overflow:hidden; white-space:nowrap; max-width:0;
+      animation: sReveal 1s 0.5s cubic-bezier(0.16,1,0.3,1) forwards;
+    }
+    @keyframes sReveal {
+      from { max-width:0; opacity:0; }
+      to   { max-width:700px; opacity:1; }
+    }
+    .splash-sub {
+      font-size:11px; letter-spacing:5px; text-transform:uppercase;
+      color:var(--muted); margin-top:14px;
+      animation: sFade 0.5s 1.2s ease both;
+    }
+    @keyframes sFade {
+      from { opacity:0; transform:translateY(6px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+    .splash-loader {
+      width:100px; height:2px; background:rgba(255,255,255,0.06);
+      border-radius:2px; overflow:hidden; margin-top:52px;
+      animation: sFade 0.4s 1.3s ease both;
+    }
+    .splash-fill {
+      height:100%;
+      background:linear-gradient(90deg,var(--primary),var(--pink));
+      animation: sLoad 1.6s 1.3s ease forwards; width:0%;
+    }
+    @keyframes sLoad { 0%{width:0%} 60%{width:65%} 100%{width:100%} }
+
+    /* ── FLOATING PHOTOS BG ────────────────────────────────── */
+    #floatStage {
+      position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden;
+    }
+    .f-card {
+      position: absolute; border-radius: 16px; overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+      animation: fDrift linear infinite;
+      opacity: 0; will-change: transform;
+    }
+    .f-card img { width:100%; height:100%; object-fit:cover; display:block; }
+    .f-card.grad {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 32px;
+    }
+    .f-card.circle { border-radius: 50%; }
+
+    @keyframes fDrift {
+      0%   { opacity:0; transform:translateY(0) rotate(var(--rs)) scale(0.9); }
+      8%   { opacity:var(--mo); }
+      90%  { opacity:var(--mo); }
+      100% { opacity:0; transform:translateY(var(--dy)) rotate(var(--re)) scale(1.06); }
+    }
+
+    /* ── NAVBAR ────────────────────────────────────────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 52px; height: 66px;
+      background: rgba(4,4,12,0.75);
+      backdrop-filter: blur(32px) saturate(1.5);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      opacity: 0; animation: navIn 0.5s 2.8s ease forwards;
+    }
+    @keyframes navIn {
+      to { opacity:1; }
+    }
+    .nav-logo {
+      font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 900;
+      color: var(--text); text-decoration: none;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .nav-logo-icon {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: linear-gradient(135deg, #7c3aed, #e879f9);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; box-shadow: 0 4px 16px rgba(124,58,237,0.4);
+    }
+    .nav-logo span { color: #a78bfa; }
+    .nav-r { display: flex; gap: 10px; align-items: center; }
+
+    /* Nav buttons */
+    .nbtn {
+      padding: 8px 22px; border-radius: 50px;
+      font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600;
+      cursor: pointer; text-decoration: none; transition: all 0.25s; border: none;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .nbtn-ghost {
+      background: transparent; color: var(--text2);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .nbtn-ghost:hover { color:var(--text); border-color:rgba(255,255,255,0.22); }
+    .nbtn-solid {
+      background: linear-gradient(135deg,#7c3aed,#5b21b6);
+      color:#fff; box-shadow:0 4px 20px rgba(124,58,237,0.4);
+    }
+    .nbtn-solid:hover { transform:translateY(-2px); box-shadow:0 8px 32px rgba(124,58,237,0.5); }
+
+    /* ── HERO ──────────────────────────────────────────────── */
+    .hero {
+      position: relative; z-index: 10;
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; padding: 130px 28px 100px;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 9px;
+      padding: 7px 20px; border-radius: 50px;
+      background: rgba(124,58,237,0.1); border: 1px solid rgba(124,58,237,0.25);
+      color: var(--accent); font-size: 12px; font-weight: 600;
+      letter-spacing: 0.05em; margin-bottom: 36px;
+      opacity:0; animation: heroEl 0.6s 2.9s ease forwards;
+    }
+    .live-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--accent);
+      animation: livePulse 2s ease infinite;
+    }
+    @keyframes livePulse {
+      0%,100% { box-shadow:0 0 0 0 rgba(167,139,250,0.5); }
+      50%     { box-shadow:0 0 0 6px rgba(167,139,250,0); }
+    }
+
+    .hero-title {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(44px, 7.5vw, 90px);
+      font-weight: 900; line-height: 1.0;
+      letter-spacing: -2px; margin-bottom: 0;
+      opacity:0; animation: heroEl 0.7s 3s ease forwards;
+    }
+    .hero-title .grad-text {
+      display: block;
+      background: linear-gradient(135deg, #a78bfa 0%, #e879f9 50%, #f0a500 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      background-size: 200% auto;
+      animation: gradShift 4s ease infinite alternate;
+    }
+    @keyframes gradShift {
+      from { background-position: 0% center; }
+      to   { background-position: 100% center; }
+    }
+
+    .hero-sub {
+      font-size: clamp(15px,1.8vw,18px); color: var(--text2);
+      max-width: 460px; margin: 24px auto 52px;
+      line-height: 1.7; font-weight: 300;
+      opacity:0; animation: heroEl 0.6s 3.15s ease forwards;
+    }
+
+    @keyframes heroEl {
+      from { opacity:0; transform:translateY(16px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+
+    .hero-actions {
+      display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;
+      opacity:0; animation: heroEl 0.6s 3.3s ease forwards;
+    }
+
+    /* MAIN CTA — big prominent button */
+    .cta-listen {
+      display: inline-flex; align-items: center; gap: 14px;
+      padding: 0 40px; height: 62px; border-radius: 50px;
+      background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 50%, #7c3aed 100%);
+      background-size: 200% auto;
+      color: #fff; font-family: 'DM Sans', sans-serif;
+      font-size: 16px; font-weight: 700; text-decoration: none;
+      box-shadow: 0 6px 40px rgba(124,58,237,0.5), 0 0 0 1px rgba(255,255,255,0.1) inset;
+      transition: all 0.3s cubic-bezier(0.16,1,0.3,1);
+      animation: gradShift 3s ease infinite alternate;
+    }
+    .cta-listen:hover {
+      transform: translateY(-3px) scale(1.03);
+      box-shadow: 0 14px 52px rgba(124,58,237,0.6);
+    }
+    .cta-listen .play-badge {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: rgba(255,255,255,0.18);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; flex-shrink:0;
+    }
+
+    .cta-ghost {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 0 32px; height: 62px; border-radius: 50px;
+      background: rgba(255,255,255,0.04);
+      color: var(--text2); font-family: 'DM Sans', sans-serif;
+      font-size: 15px; font-weight: 600; text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.1);
+      transition: all 0.25s;
+    }
+    .cta-ghost:hover {
+      color: var(--text); border-color: rgba(255,255,255,0.22);
+      background: rgba(255,255,255,0.07); transform: translateY(-2px);
+    }
+
+    /* Scroll hint */
+    .scroll-hint {
+      position: absolute; bottom: 36px; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      opacity: 0; animation: heroEl 0.6s 3.8s ease forwards;
+    }
+    .scroll-mouse {
+      width: 22px; height: 36px;
+      border: 1.5px solid rgba(255,255,255,0.14); border-radius: 11px;
+      display: flex; justify-content: center; padding-top: 6px;
+    }
+    .scroll-dot {
+      width: 3px; height: 7px; border-radius: 2px; background: var(--accent);
+      animation: scrollAnim 2.2s ease infinite;
+    }
+    @keyframes scrollAnim {
+      0%,100% { opacity:1;  transform:translateY(0); }
+      50%     { opacity:0.3; transform:translateY(12px); }
+    }
+    .scroll-hint span { font-size:11px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; }
+
+    /* ── DIVIDER TICKER ────────────────────────────────────── */
+    .ticker-strip {
+      position: relative; z-index: 10;
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      padding: 13px 0; overflow: hidden;
+      background: rgba(10,10,24,0.8);
+    }
+    .ticker { display:flex; gap:28px; width:max-content; animation:tickRoll 35s linear infinite; }
+    .ticker:hover { animation-play-state:paused; }
+    @keyframes tickRoll { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+    .t-item {
+      display:flex; align-items:center; gap:10px;
+      white-space:nowrap; font-size:13px; font-weight:500; color:var(--muted);
+    }
+    .t-dot { width:4px; height:4px; border-radius:50%; background:var(--accent); }
+
+    /* ── FEATURES ──────────────────────────────────────────── */
+    .features {
+      position: relative; z-index: 10;
+      max-width: 1100px; margin: 0 auto; padding: 110px 32px;
+    }
+    .section-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.14em; color: var(--accent); margin-bottom: 14px;
+      text-align: center;
+    }
+    .section-title {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(26px, 4vw, 46px); font-weight: 800;
+      text-align: center; margin-bottom: 64px; letter-spacing: -1px;
+    }
+    .section-title em {
+      font-style: normal;
+      background: linear-gradient(135deg, var(--accent), var(--pink));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+
+    /* Feature boxes — alternating glass cards */
+    .feat-grid {
+      display: grid; grid-template-columns: repeat(3,1fr); gap: 16px;
+    }
+    @media (max-width:768px) { .feat-grid { grid-template-columns:1fr; } }
+
+    .feat-box {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 20px; padding: 32px 28px;
+      backdrop-filter: blur(16px);
+      transition: all 0.35s cubic-bezier(0.16,1,0.3,1);
+      opacity:0; transform:translateY(28px);
+      position: relative; overflow: hidden;
+    }
+    .feat-box::before {
+      content:''; position:absolute; inset:-1px; border-radius:inherit;
+      background: linear-gradient(135deg,var(--c1,#7c3aed),var(--c2,#e879f9));
+      opacity:0; transition:opacity 0.3s; z-index:-1;
+    }
+    .feat-box:hover::before { opacity:0.08; }
+    .feat-box.visible {
+      opacity:1; transform:translateY(0);
+      transition:opacity 0.6s ease,transform 0.6s ease,border-color 0.3s,box-shadow 0.3s;
+    }
+    .feat-box:hover {
+      border-color: rgba(124,58,237,0.3);
+      transform: translateY(-5px) !important;
+      box-shadow: 0 14px 48px rgba(124,58,237,0.1);
+    }
+    .feat-icon {
+      width:48px; height:48px; border-radius:13px;
+      display:flex; align-items:center; justify-content:center;
+      font-size:22px; margin-bottom:20px;
+      background: var(--ib, rgba(124,58,237,0.12));
+    }
+    .feat-name { font-family:'Syne',sans-serif; font-size:17px; font-weight:700; margin-bottom:10px; }
+    .feat-desc { font-size:14px; color:var(--text2); line-height:1.75; font-weight:300; }
+
+    /* ── BOTTOM CTA ────────────────────────────────────────── */
+    .bottom-section {
+      position: relative; z-index: 10;
+      padding: 80px 32px 120px;
+      text-align: center;
+    }
+    .bottom-box {
+      max-width: 640px; margin: 0 auto;
+      background: rgba(124,58,237,0.07);
+      border: 1px solid rgba(124,58,237,0.18);
+      border-radius: 28px; padding: 64px 48px;
+      position: relative; overflow: hidden;
+      backdrop-filter: blur(20px);
+    }
+    .bottom-box::before {
+      content:''; position:absolute; top:-1px; left:15%; right:15%; height:1px;
+      background:linear-gradient(90deg,transparent,rgba(124,58,237,0.8),rgba(232,121,249,0.5),transparent);
+    }
+    .bottom-box::after {
+      content:''; position:absolute; bottom:-80px; left:50%; transform:translateX(-50%);
+      width:300px; height:160px; border-radius:50%;
+      background: radial-gradient(circle, rgba(124,58,237,0.15), transparent 70%);
+      pointer-events:none;
+    }
+    .bottom-title {
+      font-family:'Syne',sans-serif;
+      font-size:clamp(24px,4vw,38px); font-weight:900;
+      letter-spacing:-0.5px; margin-bottom:12px;
+    }
+    .bottom-sub { color:var(--text2); font-size:16px; font-weight:300; margin-bottom:40px; }
+
+    .cta-main-btn {
+      display:inline-flex; align-items:center; gap:12px;
+      padding: 0 52px; height: 64px; border-radius:50px;
+      background:linear-gradient(135deg,#7c3aed,#e879f9);
+      color:#fff; font-family:'DM Sans',sans-serif;
+      font-size:17px; font-weight:700; text-decoration:none;
+      box-shadow:0 8px 48px rgba(124,58,237,0.45);
+      transition:all 0.3s cubic-bezier(0.16,1,0.3,1);
+    }
+    .cta-main-btn:hover { transform:translateY(-3px) scale(1.04); box-shadow:0 14px 60px rgba(124,58,237,0.55); }
+
+    /* ── FOOTER ────────────────────────────────────────────── */
+    footer {
+      position:relative; z-index:10;
+      padding:28px 52px;
+      border-top:1px solid var(--border);
+      display:flex; align-items:center; justify-content:space-between;
+      color:var(--muted); font-size:13px;
+    }
+    footer a { color:var(--muted); text-decoration:none; transition:color 0.2s; }
+    footer a:hover { color:var(--accent); }
+    .footer-logo { font-family:'Syne',sans-serif; font-weight:900; font-size:16px; color:var(--text2); }
+    .footer-logo span { color:var(--accent); }
+
+    @media(max-width:600px){
+      nav { padding:0 18px; }
+      .hero { padding:110px 18px 80px; }
+      .features { padding:70px 18px; }
+      footer { flex-direction:column; gap:10px; text-align:center; padding:24px 18px; }
+      .bottom-box { padding:40px 24px; }
+    }
+  </style>
 </head>
 <body>
-  <div class="splash-container" id="splash">
-    <div class="particles" id="particles"></div>
-    <div class="logo-wrapper">
-      <svg class="logo-svg" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#f5d485"/>
-            <stop offset="50%" style="stop-color:#c9a84c"/>
-            <stop offset="100%" style="stop-color:#8a6523"/>
-          </linearGradient>
-          <filter id="glow">
-            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-            <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
-          </filter>
-        </defs>
-        <circle class="ring ring-1" cx="60" cy="60" r="55" stroke="url(#goldGrad)" stroke-width="0.5" fill="none" stroke-dasharray="4 6"/>
-        <circle class="ring ring-2" cx="60" cy="60" r="48" stroke="url(#goldGrad)" stroke-width="0.3" fill="none" opacity="0.4"/>
-        <path class="wave w1" d="M30 60 Q40 40 50 60 Q60 80 70 60 Q80 40 90 60" stroke="url(#goldGrad)" stroke-width="2.5" fill="none" stroke-linecap="round" filter="url(#glow)"/>
-        <path class="wave w2" d="M20 60 Q35 30 50 60 Q65 90 80 60 Q95 30 100 60" stroke="url(#goldGrad)" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.5"/>
-        <circle class="center-dot" cx="60" cy="60" r="4" fill="url(#goldGrad)" filter="url(#glow)"/>
-      </svg>
-      <div class="brand-name">AURA</div>
-      <div class="brand-tagline">Feel Every Note</div>
-    </div>
-    <div class="loading-bar">
-      <div class="loading-fill" id="loadFill"></div>
-    </div>
+
+<!-- ── SPLASH SCREEN ─────────────────────────────────────────── -->
+<div id="splash">
+  <div class="splash-ring">🎧</div>
+  <div class="splash-name">LISTENME</div>
+  <div class="splash-sub">Your music world</div>
+  <div class="splash-loader"><div class="splash-fill"></div></div>
+</div>
+
+<!-- ── FLOATING PHOTOS STAGE ─────────────────────────────────── -->
+<div id="floatStage"></div>
+
+<!-- ── NAVBAR ─────────────────────────────────────────────────── -->
+<nav>
+  <a class="nav-logo" href="index.html">
+    <div class="nav-logo-icon">🎧</div>
+    Listen<span>Me</span>
+  </a>
+  <div class="nav-r">
+    <a href="login.html"  class="nbtn nbtn-ghost">Sign In</a>
+    <a href="signup.html" class="nbtn nbtn-solid">Get Started</a>
+  </div>
+</nav>
+
+<!-- ── HERO ───────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-eyebrow">
+    <span class="live-dot"></span>
+    Stream · Discover · Repeat
   </div>
 
-  <script>
-    // Particles
-    const container = document.getElementById('particles');
-    for (let i = 0; i < 60; i++) {
-      const p = document.createElement('div');
-      p.className = 'particle';
-      p.style.cssText = `left:${Math.random()*100}%;top:${Math.random()*100}%;width:${Math.random()*3+1}px;height:${Math.random()*3+1}px;animation-delay:${Math.random()*4}s;animation-duration:${Math.random()*6+4}s;opacity:${Math.random()*0.6+0.1};`;
-      container.appendChild(p);
+  <h1 class="hero-title">
+    Music that lives<br/>
+    <span class="grad-text">inside you</span>
+  </h1>
+
+  <p class="hero-sub">
+    A curated streaming space. Every track hand-picked. Your favourites, your artists — all in one beautiful place.
+  </p>
+
+  <div class="hero-actions">
+    <a href="login.html" class="cta-listen">
+      <span class="play-badge">▶</span>
+      Listen Songs
+    </a>
+    <a href="signup.html" class="cta-ghost">
+      Create account →
+    </a>
+  </div>
+
+  <div class="scroll-hint">
+    <div class="scroll-mouse"><div class="scroll-dot"></div></div>
+    <span>Explore</span>
+  </div>
+</section>
+
+<!-- ── TICKER ─────────────────────────────────────────────────── -->
+<div class="ticker-strip">
+  <div class="ticker" id="ticker"></div>
+</div>
+
+<!-- ── FEATURES ───────────────────────────────────────────────── -->
+<section class="features">
+  <div class="section-label">What you get</div>
+  <h2 class="section-title">Built for music <em>lovers</em></h2>
+
+  <div class="feat-grid">
+    <div class="feat-box" style="--c1:#7c3aed;--c2:#a78bfa;--ib:rgba(124,58,237,0.1);">
+      <div class="feat-icon">🎵</div>
+      <div class="feat-name">Curated Library</div>
+      <div class="feat-desc">Every track approved and uploaded by our team. No noise — just music worth hearing.</div>
+    </div>
+    <div class="feat-box" style="--c1:#e879f9;--c2:#7c3aed;--ib:rgba(232,121,249,0.1);">
+      <div class="feat-icon">❤️</div>
+      <div class="feat-name">Favourites</div>
+      <div class="feat-desc">Heart the songs you love. Your personal collection always saved and waiting.</div>
+    </div>
+
+    <div class="feat-box" style="--c1:#06b6d4;--c2:#7c3aed;--ib:rgba(6,182,212,0.1);">
+      <div class="feat-icon">🎤</div>
+      <div class="feat-name">Artists</div>
+      <div class="feat-desc">Browse every artist's complete collection. All songs organised beautifully by name.</div>
+    </div>
+    <div class="feat-box" style="--c1:#10b981;--c2:#06b6d4;--ib:rgba(16,185,129,0.1);">
+      <div class="feat-icon">🔀</div>
+      <div class="feat-name">Shuffle & Loop</div>
+      <div class="feat-desc">Shuffle the entire library or loop your favourite track. Full control of your listening.</div>
+    </div>
+    <div class="feat-box" style="--c1:#f43f5e;--c2:#e879f9;--ib:rgba(244,63,94,0.1);">
+      <div class="feat-icon">🔒</div>
+      <div class="feat-name">Private & Secure</div>
+      <div class="feat-desc">Your account, your data. No ads, no tracking. Just you and music.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── BOTTOM CTA ──────────────────────────────────────────────── -->
+<section class="bottom-section">
+  <div class="bottom-box">
+    <div class="bottom-title">Ready to listen?</div>
+    <div class="bottom-sub">Free to join. Beautiful to use.</div>
+    <a href="login.html" class="cta-main-btn">🎧 Listen Songs Now</a>
+    <div style="margin-top:22px;font-size:13px;color:var(--muted);">
+      Have an account? <a href="login.html" style="color:#a78bfa;font-weight:600;text-decoration:none;">Sign in →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ──────────────────────────────────────────────────── -->
+<footer>
+  <div class="footer-logo">🎧 Listen<span>Me</span></div>
+  <div style="display:flex;gap:20px;">
+    <a href="signup.html">Sign Up</a>
+    <a href="login.html">Sign In</a>
+    
+  </div>
+</footer>
+
+<script src="photos.js"></script>
+<script>
+// ── Splash ──────────────────────────────────────────────────────
+setTimeout(() => {
+  document.getElementById('splash').classList.add('exit');
+  setTimeout(() => {
+    document.getElementById('splash').remove();
+    spawnCards();
+  }, 800);
+}, 2900);
+
+// ── If already logged in ────────────────────────────────────────
+if (localStorage.getItem('token')) {
+  document.querySelectorAll('.cta-listen,.cta-main-btn').forEach(el => el.href = 'play.html');
+  document.querySelectorAll('.nbtn-solid').forEach(el => { el.href='play.html'; el.textContent='Open App'; });
+}
+
+// ── Floating cards ─────────────────────────────────────────────
+function spawnCards() {
+  const stage = document.getElementById('floatStage');
+  const allPhotos = [
+    ...PHOTO_CONFIG.artists.map(f  => ({ src:`photos/artists/${f}`,     type:'circle' })),
+    ...PHOTO_CONFIG.thumbnails.map(f=> ({ src:`photos/thumbnails/${f}`,  type:'square' })),
+    ...PHOTO_CONFIG.banners.map(f  => ({ src:`photos/banners/${f}`,      type:'wide'   })),
+  ];
+  const emojis = ['🎵','🎶','🎸','🎹','🎺','🎻','🥁','🎤','🎧','🎼','🎷'];
+
+  const count = window.innerWidth < 600 ? 10 : 20;
+
+  for (let i = 0; i < count; i++) {
+    const card    = document.createElement('div');
+    const side    = Math.random() < 0.5 ? 'left' : 'right';
+    const xRange  = side === 'left' ? [1, 22] : [76, 98];
+    const x       = xRange[0] + Math.random() * (xRange[1] - xRange[0]);
+    const y       = 10 + Math.random() * 75;
+    const dy      = -(150 + Math.random() * 280) + 'px';
+    const rs      = ((Math.random() - 0.5) * 18) + 'deg';
+    const re      = ((Math.random() - 0.5) * 22) + 'deg';
+    const dur     = 20 + Math.random() * 28;
+    const delay   = Math.random() * 18;
+    const mo      = 0.22 + Math.random() * 0.32;
+
+    card.style.setProperty('--dy', dy);
+    card.style.setProperty('--rs', rs);
+    card.style.setProperty('--re', re);
+    card.style.setProperty('--mo', mo);
+    card.style.left             = x + 'vw';
+    card.style.top              = y + 'vh';
+    card.style.animationDuration= dur + 's';
+    card.style.animationDelay   = delay + 's';
+
+    if (allPhotos.length > 0) {
+      const photo = allPhotos[Math.floor(Math.random() * allPhotos.length)];
+      const isCircle = photo.type === 'circle';
+      const isWide   = photo.type === 'wide';
+      const w = isWide ? 140 : isCircle ? 72 : 88;
+      const h = isWide ? 80  : isCircle ? 72 : 88;
+
+      card.className = 'f-card' + (isCircle ? ' circle' : '');
+      card.style.width  = w + 'px';
+      card.style.height = h + 'px';
+      const img = document.createElement('img');
+      img.src = photo.src;
+      img.onerror = () => makeGradCard(card);
+      card.appendChild(img);
+    } else {
+      makeGradCard(card);
     }
-    // Loading bar then redirect
-    let progress = 0;
-    const fill = document.getElementById('loadFill');
-    const interval = setInterval(() => {
-      progress += Math.random() * 15;
-      if (progress >= 100) {
-        progress = 100;
-        fill.style.width = '100%';
-        clearInterval(interval);
-        setTimeout(() => {
-          document.getElementById('splash').classList.add('fade-out');
-          setTimeout(() => { window.location.href = 'home.html'; }, 600);
-        }, 400);
-      } else {
-        fill.style.width = progress + '%';
-      }
-    }, 120);
-  </script>
+
+    stage.appendChild(card);
+    setTimeout(() => { if(card.parentNode) card.parentNode.removeChild(card); },
+               (dur + delay + 3) * 1000);
+  }
+}
+
+function makeGradCard(card) {
+  const pal = GRADIENT_PALETTES[Math.floor(Math.random() * GRADIENT_PALETTES.length)];
+  const emojis = ['🎵','🎶','🎸','🎹','🎤','🎧','🎼'];
+  const sz = 70 + Math.random() * 50;
+  card.className = 'f-card grad';
+  card.style.width  = sz + 'px';
+  card.style.height = sz + 'px';
+  card.style.background = `linear-gradient(135deg,${pal[0]},${pal[1]})`;
+  card.style.fontSize = Math.floor(sz * 0.45) + 'px';
+  card.innerHTML = '';
+  card.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+}
+
+// ── Ticker ─────────────────────────────────────────────────────
+const tickItems = [
+  '🎵 Stream music','❤️ Save favourites','🎤 Browse artists',
+  '🔀 Shuffle mode','🔁 Loop tracks',
+  '🖼️ Rich thumbnails','🔒 Private & secure','⚡ Admin uploads',
+  '🎧 ListenMe','✨ Premium experience',
+];
+const ticker = document.getElementById('ticker');
+const doubled = [...tickItems,...tickItems,...tickItems];
+ticker.innerHTML = doubled.map(t=>`<div class="t-item"><span class="t-dot"></span>${t}</div>`).join('');
+
+// ── Scroll reveal ───────────────────────────────────────────────
+const io = new IntersectionObserver(entries => {
+  if (entries[0].isIntersecting) {
+    document.querySelectorAll('.feat-box').forEach((b,i) =>
+      setTimeout(()=>b.classList.add('visible'), i * 90));
+    io.disconnect();
+  }
+}, { threshold: 0.1 });
+io.observe(document.querySelector('.feat-grid'));
+</script>
 </body>
 </html>

@@ -4,3 +4,14 @@ node_modules/
 logs/
 .DS_Store
 Thumbs.db
+# Local .terraform directories
+**/.terraform/*
+
+# Terraform state files
+*.tfstate
+*.tfstate.*
+
+# Terraform lock file
+.terraform.lock.hcl
+# documents
+*.doc

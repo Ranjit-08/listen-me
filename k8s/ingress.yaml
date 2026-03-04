@@ -1,0 +1,36 @@
+# ── AWS ALB Ingress ───────────────────────────────────────────────
+# This creates a public internet-facing ALB automatically.
+# After first deploy: kubectl get ingress -n listenme
+# The ADDRESS column is your app URL.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: listenme-ingress
+  namespace: listenme
+  annotations:
+    kubernetes.io/ingress.class:               "alb"
+    alb.ingress.kubernetes.io/scheme:          "internet-facing"
+    alb.ingress.kubernetes.io/target-type:     "ip"
+    alb.ingress.kubernetes.io/listen-ports:    '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: "/health"
+    alb.ingress.kubernetes.io/success-codes:   "200"
+spec:
+  rules:
+    - http:
+        paths:
+          # All /api/* traffic → backend
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: listenme-backend-svc
+                port:
+                  number: 5000
+          # Everything else → frontend
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: listenme-frontend-svc
+                port:
+                  number: 80

@@ -1,0 +1,68 @@
+# ── Frontend Deployment ───────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: listenme-frontend
+  namespace: listenme
+  labels:
+    app: listenme-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: listenme-frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: listenme-frontend
+    spec:
+      containers:
+        - name: frontend
+          # IMAGE is replaced by GitHub Actions with real ECR URL + commit SHA tag
+          image: IMAGE_FRONTEND
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu:    "50m"
+            limits:
+              memory: "128Mi"
+              cpu:    "100m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds:       20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds:       10
+      terminationGracePeriodSeconds: 10
+
+---
+# ── Frontend Service ──────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: listenme-frontend-svc
+  namespace: listenme
+  labels:
+    app: listenme-frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: listenme-frontend
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP

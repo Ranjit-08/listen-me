@@ -1,0 +1,117 @@
+name: Deploy to EKS
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION:       ${{ secrets.AWS_REGION }}
+  EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
+  ECR_BACKEND:      ${{ secrets.ECR_BACKEND_URL }}
+  ECR_FRONTEND:     ${{ secrets.ECR_FRONTEND_URL }}
+
+jobs:
+
+  # ── Job 1: Build & push Docker images to ECR ──────────────────
+  build:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: tag
+        run: echo "tag=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Inject API URL into config.js
+        run: |
+          sed -i "s|http://YOUR-FRONTEND-ALB-DNS/api|${{ secrets.FRONTEND_URL }}/api|g" \
+            frontend/config.js
+
+      - name: Build & push backend
+        run: |
+          docker build -f Dockerfile.backend -t $ECR_BACKEND:${{ steps.tag.outputs.tag }} -t $ECR_BACKEND:latest .
+          docker push $ECR_BACKEND:${{ steps.tag.outputs.tag }}
+          docker push $ECR_BACKEND:latest
+
+      - name: Build & push frontend
+        run: |
+          docker build -f Dockerfile.frontend -t $ECR_FRONTEND:${{ steps.tag.outputs.tag }} -t $ECR_FRONTEND:latest .
+          docker push $ECR_FRONTEND:${{ steps.tag.outputs.tag }}
+          docker push $ECR_FRONTEND:latest
+
+  # ── Job 2: Deploy to Kubernetes ────────────────────────────────
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
+
+      - name: Apply namespace
+        run: kubectl apply -f k8s/namespace.yaml
+
+      - name: Apply secrets
+        run: |
+          sed \
+            -e "s|{{ DB_HOST }}|${{ secrets.DB_HOST }}|g" \
+            -e "s|{{ DB_USER }}|${{ secrets.DB_USER }}|g" \
+            -e "s|{{ DB_PASSWORD }}|${{ secrets.DB_PASSWORD }}|g" \
+            -e "s|{{ SECRET_KEY }}|${{ secrets.SECRET_KEY }}|g" \
+            -e "s|{{ S3_BUCKET }}|${{ secrets.S3_BUCKET }}|g" \
+            -e "s|{{ AWS_REGION }}|${{ secrets.AWS_REGION }}|g" \
+            -e "s|{{ AWS_ACCESS_KEY_ID }}|${{ secrets.AWS_ACCESS_KEY_ID }}|g" \
+            -e "s|{{ AWS_SECRET_ACCESS_KEY }}|${{ secrets.AWS_SECRET_ACCESS_KEY }}|g" \
+            -e "s|{{ MAIL_USERNAME }}|${{ secrets.MAIL_USERNAME }}|g" \
+            -e "s|{{ MAIL_PASSWORD }}|${{ secrets.MAIL_PASSWORD }}|g" \
+            -e "s|{{ ADMIN_EMAIL }}|${{ secrets.ADMIN_EMAIL }}|g" \
+            -e "s|{{ FRONTEND_URL }}|${{ secrets.FRONTEND_URL }}|g" \
+            k8s/secrets.yaml | kubectl apply -f -
+
+      - name: Deploy backend
+        run: |
+          TAG=${{ needs.build.outputs.tag }}
+          sed "s|IMAGE_BACKEND|$ECR_BACKEND:$TAG|g" k8s/backend.yaml | kubectl apply -f -
+          kubectl rollout status deployment/listenme-backend -n listenme --timeout=120s
+
+      - name: Deploy frontend
+        run: |
+          TAG=${{ needs.build.outputs.tag }}
+          sed "s|IMAGE_FRONTEND|$ECR_FRONTEND:$TAG|g" k8s/frontend.yaml | kubectl apply -f -
+          kubectl rollout status deployment/listenme-frontend -n listenme --timeout=120s
+
+      - name: Apply ingress
+        run: kubectl apply -f k8s/ingress.yaml
+
+      - name: Print app URL
+        run: |
+          sleep 20
+          URL=$(kubectl get ingress listenme-ingress -n listenme \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "provisioning...")
+          echo "======================================="
+          echo "  APP URL: http://$URL"
+          echo "======================================="

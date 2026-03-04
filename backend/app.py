@@ -892,12 +892,15 @@ def health():
     return jsonify({'status': 'ok', 'app': 'ListenMe'}), 200
 
 
+# ── Run init_db at startup (works with both gunicorn and direct python) ─────────
+if not os.environ.get('APP_URL'):
+    print("WARNING: APP_URL not set — password reset links will be broken!")
+if not ADMIN_EMAIL:
+    print("WARNING: ADMIN_EMAIL not set — no one can upload music!")
+else:
+    print(f"Admin email: {ADMIN_EMAIL}")
+
+init_db()
+
 if __name__ == '__main__':
-    if not os.environ.get('APP_URL'):
-        print("WARNING: APP_URL not set — password reset links will be broken!")
-    if not ADMIN_EMAIL:
-        print("WARNING: ADMIN_EMAIL not set — no one can upload music!")
-    else:
-        print(f"Admin email: {ADMIN_EMAIL}")
-    init_db()
     app.run(host='0.0.0.0', port=5000, debug=False)

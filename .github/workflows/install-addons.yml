@@ -9,6 +9,7 @@ env:
 
 jobs:
   install-addons:
+    name: Install ALB Controller & EBS CSI
     runs-on: ubuntu-latest
     environment: production
 
@@ -20,27 +21,18 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ env.AWS_REGION }}
 
-      # ✅ Install kubectl
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v4
-        with:
-          version: 'v1.29.0'
-
       - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig \
             --region $AWS_REGION \
             --name $EKS_CLUSTER_NAME
 
-      # ✅ Verify cluster access
-      - name: Verify cluster connection
-        run: kubectl get nodes
-
       - name: Install Helm
         uses: azure/setup-helm@v3
         with:
           version: "3.14.0"
 
+      # ── AWS Load Balancer Controller ──────────────────────────────
       - name: Add EKS Helm repo
         run: |
           helm repo add eks https://aws.github.io/eks-charts
@@ -48,6 +40,7 @@ jobs:
 
       - name: Install AWS Load Balancer Controller
         run: |
+          # Get VPC ID
           VPC_ID=$(aws eks describe-cluster \
             --name $EKS_CLUSTER_NAME \
             --query "cluster.resourcesVpcConfig.vpcId" \
@@ -64,8 +57,18 @@ jobs:
             --wait
 
       - name: Verify ALB Controller
-        run: kubectl get deployment -n kube-system aws-load-balancer-controller
+        run: |
+          kubectl get deployment -n kube-system aws-load-balancer-controller
+          echo "ALB Controller installed successfully"
 
+      # ── Metrics Server (for kubectl top) ─────────────────────────
       - name: Install Metrics Server
         run: |
           kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+      - name: Done
+        run: |
+          echo "════════════════════════════════════════════════"
+          echo "  EKS addons installed!"
+          echo "  Now run the 'Build & Deploy to EKS' workflow"
+          echo "════════════════════════════════════════════════"

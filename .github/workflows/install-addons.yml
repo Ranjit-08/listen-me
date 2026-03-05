@@ -1,76 +1,54 @@
 name: Install EKS Addons (run once after Terraform)
 
 on:
-workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
-install:
-runs-on: ubuntu-latest
+  install:
+    runs-on: ubuntu-latest
 
-```
-steps:
-  - name: Configure AWS credentials
-    uses: aws-actions/configure-aws-credentials@v4
-    with:
-      aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      aws-region:            ${{ secrets.AWS_REGION }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ secrets.AWS_REGION }}
 
-  # Install kubectl (required for EKS access)
-  - name: Install kubectl
-    uses: azure/setup-kubectl@v4
-    with:
-      version: v1.29.0
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ secrets.AWS_REGION }} \
+            --name ${{ secrets.EKS_CLUSTER_NAME }}
 
-  # Update kubeconfig
-  - name: Update kubeconfig
-    run: |
-      aws eks update-kubeconfig \
-        --region ${{ secrets.AWS_REGION }} \
-        --name ${{ secrets.EKS_CLUSTER_NAME }}
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: "3.14.0"
 
-  # Verify cluster connectivity
-  - name: Verify EKS connection
-    run: |
-      kubectl cluster-info
-      kubectl get nodes
+      - name: Add EKS Helm repo
+        run: |
+          helm repo add eks https://aws.github.io/eks-charts
+          helm repo update
 
-  - name: Install Helm
-    uses: azure/setup-helm@v3
-    with:
-      version: "3.14.0"
+      - name: Install AWS Load Balancer Controller
+        run: |
+          VPC_ID=$(aws eks describe-cluster \
+            --name ${{ secrets.EKS_CLUSTER_NAME }} \
+            --query "cluster.resourcesVpcConfig.vpcId" \
+            --output text)
 
-  - name: Add EKS Helm repo
-    run: |
-      helm repo add eks https://aws.github.io/eks-charts
-      helm repo update
+          helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+            -n kube-system \
+            --set clusterName=${{ secrets.EKS_CLUSTER_NAME }} \
+            --set serviceAccount.create=true \
+            --set serviceAccount.name=aws-load-balancer-controller \
+            --set "serviceAccount.annotations.eks\.amazonaws\.com/role-arn=${{ secrets.ALB_CONTROLLER_ROLE_ARN }}" \
+            --set region=${{ secrets.AWS_REGION }} \
+            --set vpcId=$VPC_ID \
+            --wait --timeout=5m
 
-  - name: Install AWS Load Balancer Controller
-    run: |
-      set -e
-
-      VPC_ID=$(aws eks describe-cluster \
-        --name ${{ secrets.EKS_CLUSTER_NAME }} \
-        --query "cluster.resourcesVpcConfig.vpcId" \
-        --output text)
-
-      # Ensure namespace exists
-      kubectl create namespace kube-system --dry-run=client -o yaml | kubectl apply -f -
-
-      helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
-        -n kube-system \
-        --create-namespace \
-        --set clusterName=${{ secrets.EKS_CLUSTER_NAME }} \
-        --set serviceAccount.create=true \
-        --set serviceAccount.name=aws-load-balancer-controller \
-        --set "serviceAccount.annotations.eks\.amazonaws\.com/role-arn=${{ secrets.ALB_CONTROLLER_ROLE_ARN }}" \
-        --set region=${{ secrets.AWS_REGION }} \
-        --set vpcId=$VPC_ID \
-        --wait --timeout=5m
-
-  - name: Verify
-    run: |
-      kubectl get deployment -n kube-system aws-load-balancer-controller
-      kubectl get pods -n kube-system | grep aws-load-balancer
-      echo "Done — now push code to main to trigger the deploy workflow"
-```
+      - name: Verify
+        run: |
+          kubectl get deployment -n kube-system aws-load-balancer-controller
+          echo "Done — now push code to main to trigger the deploy workflow"

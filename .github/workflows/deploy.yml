@@ -43,13 +43,17 @@ jobs:
 
       - name: Build & push backend
         run: |
-          docker build -f Dockerfile.backend -t $ECR_BACKEND:${{ steps.tag.outputs.tag }} -t $ECR_BACKEND:latest .
+          docker build -f Dockerfile.backend \
+            -t $ECR_BACKEND:${{ steps.tag.outputs.tag }} \
+            -t $ECR_BACKEND:latest .
           docker push $ECR_BACKEND:${{ steps.tag.outputs.tag }}
           docker push $ECR_BACKEND:latest
 
       - name: Build & push frontend
         run: |
-          docker build -f Dockerfile.frontend -t $ECR_FRONTEND:${{ steps.tag.outputs.tag }} -t $ECR_FRONTEND:latest .
+          docker build -f Dockerfile.frontend \
+            -t $ECR_FRONTEND:${{ steps.tag.outputs.tag }} \
+            -t $ECR_FRONTEND:latest .
           docker push $ECR_FRONTEND:${{ steps.tag.outputs.tag }}
           docker push $ECR_FRONTEND:latest
 
@@ -62,56 +66,101 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ── FIX 1: Install kubectl (not pre-installed on runner) ──
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "v1.29.0"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
+          aws-region:            ${{ secrets.AWS_REGION }}
 
       - name: Update kubeconfig
-        run: aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ secrets.AWS_REGION }} \
+            --name   ${{ secrets.EKS_CLUSTER_NAME }}
+
+      - name: Verify cluster connection
+        run: kubectl get nodes
 
       - name: Apply namespace
         run: kubectl apply -f k8s/namespace.yaml
 
+      # ── FIX 2: base64-encode all values so Kubernetes accepts them
+      # ── FIX 3: Added DB_NAME and MAIL_SERVER which were missing ──
       - name: Apply secrets
         run: |
-          sed \
-            -e "s|{{ DB_HOST }}|${{ secrets.DB_HOST }}|g" \
-            -e "s|{{ DB_USER }}|${{ secrets.DB_USER }}|g" \
-            -e "s|{{ DB_PASSWORD }}|${{ secrets.DB_PASSWORD }}|g" \
-            -e "s|{{ SECRET_KEY }}|${{ secrets.SECRET_KEY }}|g" \
-            -e "s|{{ S3_BUCKET }}|${{ secrets.S3_BUCKET }}|g" \
-            -e "s|{{ AWS_REGION }}|${{ secrets.AWS_REGION }}|g" \
-            -e "s|{{ AWS_ACCESS_KEY_ID }}|${{ secrets.AWS_ACCESS_KEY_ID }}|g" \
-            -e "s|{{ AWS_SECRET_ACCESS_KEY }}|${{ secrets.AWS_SECRET_ACCESS_KEY }}|g" \
-            -e "s|{{ MAIL_USERNAME }}|${{ secrets.MAIL_USERNAME }}|g" \
-            -e "s|{{ MAIL_PASSWORD }}|${{ secrets.MAIL_PASSWORD }}|g" \
-            -e "s|{{ ADMIN_EMAIL }}|${{ secrets.ADMIN_EMAIL }}|g" \
-            -e "s|{{ FRONTEND_URL }}|${{ secrets.FRONTEND_URL }}|g" \
-            k8s/secrets.yaml | kubectl apply -f -
+          cat <<EOF | kubectl apply -f -
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: listenme-secrets
+            namespace: listenme
+          type: Opaque
+          stringData:
+            DB_HOST:                "${{ secrets.DB_HOST }}"
+            DB_USER:                "${{ secrets.DB_USER }}"
+            DB_PASSWORD:            "${{ secrets.DB_PASSWORD }}"
+            DB_NAME:                "${{ secrets.DB_NAME }}"
+            SECRET_KEY:             "${{ secrets.SECRET_KEY }}"
+            S3_BUCKET:              "${{ secrets.S3_BUCKET }}"
+            AWS_REGION:             "${{ secrets.AWS_REGION }}"
+            AWS_ACCESS_KEY_ID:      "${{ secrets.AWS_ACCESS_KEY_ID }}"
+            AWS_SECRET_ACCESS_KEY:  "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+            MAIL_SERVER:            "smtp.gmail.com"
+            MAIL_USERNAME:          "${{ secrets.MAIL_USERNAME }}"
+            MAIL_PASSWORD:          "${{ secrets.MAIL_PASSWORD }}"
+            ADMIN_EMAIL:            "${{ secrets.ADMIN_EMAIL }}"
+            FRONTEND_URL:           "${{ secrets.FRONTEND_URL }}"
+          EOF
+        # Using stringData: instead of data: means NO base64 encoding needed.
+        # Kubernetes handles the encoding internally.
 
+      # ── FIX 4: Re-declare ECR vars — workflow-level env not always
+      #           inherited cleanly in jobs that use `needs:`
       - name: Deploy backend
+        env:
+          ECR_BACKEND: ${{ secrets.ECR_BACKEND_URL }}
         run: |
           TAG=${{ needs.build.outputs.tag }}
-          sed "s|IMAGE_BACKEND|$ECR_BACKEND:$TAG|g" k8s/backend.yaml | kubectl apply -f -
-          kubectl rollout status deployment/listenme-backend -n listenme --timeout=120s
+          sed "s|IMAGE_BACKEND|$ECR_BACKEND:$TAG|g" k8s/backend.yaml \
+            | kubectl apply -f -
+          kubectl rollout status deployment/listenme-backend \
+            -n listenme --timeout=180s
 
       - name: Deploy frontend
+        env:
+          ECR_FRONTEND: ${{ secrets.ECR_FRONTEND_URL }}
         run: |
           TAG=${{ needs.build.outputs.tag }}
-          sed "s|IMAGE_FRONTEND|$ECR_FRONTEND:$TAG|g" k8s/frontend.yaml | kubectl apply -f -
-          kubectl rollout status deployment/listenme-frontend -n listenme --timeout=120s
+          sed "s|IMAGE_FRONTEND|$ECR_FRONTEND:$TAG|g" k8s/frontend.yaml \
+            | kubectl apply -f -
+          kubectl rollout status deployment/listenme-frontend \
+            -n listenme --timeout=180s
 
       - name: Apply ingress
         run: kubectl apply -f k8s/ingress.yaml
 
-      - name: Print app URL
+      # ── FIX 5: 20s is too short — ALB takes 60-90s to provision ──
+      - name: Wait for ALB and print app URL
         run: |
-          sleep 20
-          URL=$(kubectl get ingress listenme-ingress -n listenme \
-            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "provisioning...")
-          echo "======================================="
-          echo "  APP URL: http://$URL"
-          echo "======================================="
+          echo "Waiting for ALB to provision (up to 90s)..."
+          for i in $(seq 1 9); do
+            URL=$(kubectl get ingress listenme-ingress -n listenme \
+              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+            if [ -n "$URL" ]; then
+              echo "======================================="
+              echo "  APP URL: http://$URL"
+              echo "======================================="
+              exit 0
+            fi
+            echo "  attempt $i/9 — not ready yet, waiting 10s..."
+            sleep 10
+          done
+          echo "ALB still provisioning — check ingress manually:"
+          echo "  kubectl get ingress -n listenme"

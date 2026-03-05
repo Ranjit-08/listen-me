@@ -1,4 +1,4 @@
-name: Install EKS Addons (run once after Terraform)
+name: Install EKS Addons
 
 on:
 workflow_dispatch:
@@ -83,8 +83,8 @@ steps:
 
   - name: Done
     run: |
-      echo "════════════════════════════════════════════════"
-      echo "EKS addons installed successfully!"
-      echo "Next step: Run the 'Build & Deploy to EKS' workflow"
-      echo "════════════════════════════════════════════════"
+      echo "=========================================="
+      echo "EKS addons installed successfully"
+      echo "Now run the 'Build & Deploy to EKS' workflow"
+      echo "=========================================="
 ```

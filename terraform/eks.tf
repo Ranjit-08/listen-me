@@ -22,7 +22,6 @@ resource "aws_security_group" "eks_nodes" {
   description = "EKS worker nodes"
   vpc_id      = aws_vpc.main.id
 
-  # Node to node communication
   ingress {
     from_port = 0
     to_port   = 0
@@ -30,7 +29,6 @@ resource "aws_security_group" "eks_nodes" {
     self      = true
   }
 
-  # Cluster to nodes
   ingress {
     from_port       = 1025
     to_port         = 65535
@@ -58,11 +56,9 @@ resource "aws_iam_role" "eks_cluster" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "eks.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "eks.amazonaws.com" }
+      Action    = "sts:AssumeRole"
     }]
   })
 }
@@ -80,11 +76,9 @@ resource "aws_iam_role" "eks_nodes" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "ec2.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
     }]
   })
 }
@@ -104,7 +98,6 @@ resource "aws_iam_role_policy_attachment" "eks_ecr_readonly" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-# Allow nodes to access S3
 resource "aws_iam_role_policy" "eks_nodes_s3" {
   name = "listenme-nodes-s3"
   role = aws_iam_role.eks_nodes.id
@@ -127,7 +120,7 @@ resource "aws_iam_role_policy" "eks_nodes_s3" {
   })
 }
 
-# ─── EKS Cluster ─────────────────────────────────────────────────
+# ─── EKS Cluster ──────────────────────────────────────────────────
 
 resource "aws_eks_cluster" "main" {
   name     = "listenme-eks"
@@ -145,6 +138,11 @@ resource "aws_eks_cluster" "main" {
     security_group_ids      = [aws_security_group.eks_cluster.id]
     endpoint_public_access  = true
     endpoint_private_access = true
+  }
+
+  access_config {
+    authentication_mode                         = "API_AND_CONFIG_MAP"
+    bootstrap_cluster_creator_admin_permissions = true
   }
 
   depends_on = [
@@ -187,7 +185,7 @@ resource "aws_eks_node_group" "main" {
   }
 }
 
-# ─── OIDC Provider ───────────────────────────────────────────────
+# ─── OIDC Provider ────────────────────────────────────────────────
 
 data "tls_certificate" "eks" {
   url = aws_eks_cluster.main.identity[0].oidc[0].issuer
@@ -199,7 +197,51 @@ resource "aws_iam_openid_connect_provider" "eks" {
   thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
 }
 
-# ─── IAM Role for ALB Controller ─────────────────────────────────
+# ─── GitHub Actions IAM User ──────────────────────────────────────
+
+resource "aws_iam_user" "github_actions" {
+  name = "github-listenme"
+  path = "/"
+
+  tags = {
+    Name = "github-listenme"
+    Use  = "GitHub Actions CI/CD"
+  }
+}
+
+resource "aws_iam_user_policy_attachment" "github_actions_admin" {
+  user       = aws_iam_user.github_actions.name
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
+
+resource "aws_iam_access_key" "github_actions" {
+  user = aws_iam_user.github_actions.name
+}
+
+# ─── Grant GitHub Actions EKS cluster access ─────────────────────
+
+resource "aws_eks_access_entry" "github_actions" {
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = aws_iam_user.github_actions.arn
+  type          = "STANDARD"
+
+  depends_on = [aws_eks_cluster.main]
+}
+
+resource "aws_eks_access_policy_association" "github_actions_admin" {
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = aws_iam_user.github_actions.arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.github_actions]
+}
+
+# ─── IAM Role for ALB Controller (IRSA) ──────────────────────────
+# This was missing from your file — caused the outputs.tf error
 
 resource "aws_iam_role" "alb_controller" {
   name = "listenme-alb-controller"
@@ -209,11 +251,9 @@ resource "aws_iam_role" "alb_controller" {
     Statement = [{
       Effect = "Allow"
       Action = "sts:AssumeRoleWithWebIdentity"
-
       Principal = {
         Federated = aws_iam_openid_connect_provider.eks.arn
       }
-
       Condition = {
         StringEquals = {
           "${replace(aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")}:sub" = "system:serviceaccount:kube-system:aws-load-balancer-controller"

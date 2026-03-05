@@ -21,63 +21,19 @@ jobs:
         with:
           version: "v1.29.0"
 
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ secrets.AWS_REGION }} \
+            --name   ${{ secrets.EKS_CLUSTER_NAME }}
+
+      - name: Verify cluster connection
+        run: kubectl get nodes
+
       - name: Install Helm
         uses: azure/setup-helm@v3
         with:
           version: "3.14.0"
-
-      # ── THE FIX ────────────────────────────────────────────────
-      # update-kubeconfig alone creates a config that uses the AWS
-      # exec plugin. Helm sometimes can't invoke that plugin properly.
-      # Solution: generate a static token and build a self-contained
-      # kubeconfig that both kubectl AND helm can use with no plugin.
-      - name: Build kubeconfig with static token
-        run: |
-          # 1. Get cluster details
-          ENDPOINT=$(aws eks describe-cluster \
-            --name ${{ secrets.EKS_CLUSTER_NAME }} \
-            --query "cluster.endpoint" \
-            --output text)
-
-          CA=$(aws eks describe-cluster \
-            --name ${{ secrets.EKS_CLUSTER_NAME }} \
-            --query "cluster.certificateAuthority.data" \
-            --output text)
-
-          # 2. Generate a short-lived token (valid 15 min — enough for the job)
-          TOKEN=$(aws eks get-token \
-            --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
-            --query "status.token" \
-            --output text)
-
-          # 3. Write a fully self-contained kubeconfig (no exec plugin needed)
-          mkdir -p ~/.kube
-          cat > ~/.kube/config << EOF
-          apiVersion: v1
-          kind: Config
-          clusters:
-            - name: eks-cluster
-              cluster:
-                server: ${ENDPOINT}
-                certificate-authority-data: ${CA}
-          users:
-            - name: eks-user
-              user:
-                token: ${TOKEN}
-          contexts:
-            - name: eks-context
-              context:
-                cluster: eks-cluster
-                user: eks-user
-          current-context: eks-context
-          EOF
-
-          echo "Kubeconfig written."
-
-      - name: Verify cluster connection
-        run: |
-          kubectl get nodes
-          kubectl get namespaces
 
       - name: Add EKS Helm repo
         run: |
@@ -104,11 +60,9 @@ jobs:
             --set vpcId=$VPC_ID \
             --wait --timeout=5m
 
-      - name: Verify ALB Controller is running
+      - name: Verify
         run: |
           kubectl get deployment -n kube-system aws-load-balancer-controller
           kubectl get pods -n kube-system \
             -l app.kubernetes.io/name=aws-load-balancer-controller
-          echo "-------------------------------------------"
-          echo "Addons installed. Push to main to deploy."
-          echo "-------------------------------------------"
+          echo "Done — now push to main to trigger deploy workflow"

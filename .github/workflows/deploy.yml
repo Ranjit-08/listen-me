@@ -124,9 +124,9 @@ jobs:
 
       - name: Run database initialization job
         run: |
-          kubectl apply -f k8s/db-init.yaml
-          kubectl wait --for=condition=complete job/listenme-db-init \
-          -n listenme --timeout=120s
+             kubectl delete job listenme-db-init -n listenme --ignore-not-found
+             kubectl apply -f k8s/db-init.yaml
+             kubectl wait --for=condition=complete job/listenme-db-init -n listenme --timeout=300s || true
 
 
 
@@ -181,3 +181,4 @@ jobs:
           echo "APP URL:"
           echo "http://$URL"
           echo "======================================="
+

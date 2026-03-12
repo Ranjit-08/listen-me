@@ -14,7 +14,7 @@ spec:
         - sh
         - -c
         - |
-          mysql -h $DB_HOST -u $DB_USER -p$DB_PASSWORD -e "CREATE DATABASE IF NOT EXISTS musicapp;"
+          mysql -h $DB_HOST -u $DB_USER -p$DB_PASSWORD -e "CREATE DATABASE IF NOT EXISTS listenme;"
         env:
         - name: DB_HOST
           valueFrom:

@@ -38,8 +38,7 @@ jobs:
 
       - name: Inject API URL into config.js
         run: |
-          sed -i "s|http://YOUR-FRONTEND-ALB-DNS/api|${{ secrets.FRONTEND_URL }}/api|g" \
-            frontend/config.js
+          sed -i "s|http://YOUR-FRONTEND-ALB-DNS/api|${{ secrets.FRONTEND_URL }}/api|g" frontend/config.js
 
       - name: Build & push backend
         run: |
@@ -52,6 +51,7 @@ jobs:
           docker build -f Dockerfile.frontend -t $ECR_FRONTEND:${{ steps.tag.outputs.tag }} -t $ECR_FRONTEND:latest .
           docker push $ECR_FRONTEND:${{ steps.tag.outputs.tag }}
           docker push $ECR_FRONTEND:latest
+
 
   # ── Job 2: Deploy to Kubernetes ────────────────────────────────
   deploy:
@@ -68,6 +68,18 @@ jobs:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ env.AWS_REGION }}
+
+      # ✅ Install MySQL client
+      - name: Install MySQL client
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+
+      # ✅ Create database automatically
+      - name: Ensure musicapp database exists
+        run: |
+          mysql -h ${{ secrets.DB_HOST }} \
+          -u ${{ secrets.DB_USER }} \
+          -p${{ secrets.DB_PASSWORD }} \
+          -e "CREATE DATABASE IF NOT EXISTS musicapp;"
 
       - name: Update kubeconfig
         run: aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
@@ -96,13 +108,13 @@ jobs:
         run: |
           TAG=${{ needs.build.outputs.tag }}
           sed "s|IMAGE_BACKEND|$ECR_BACKEND:$TAG|g" k8s/backend.yaml | kubectl apply -f -
-          kubectl rollout status deployment/listenme-backend -n listenme --timeout=120s
+          kubectl rollout status deployment/listenme-backend -n listenme --timeout=180s
 
       - name: Deploy frontend
         run: |
           TAG=${{ needs.build.outputs.tag }}
           sed "s|IMAGE_FRONTEND|$ECR_FRONTEND:$TAG|g" k8s/frontend.yaml | kubectl apply -f -
-          kubectl rollout status deployment/listenme-frontend -n listenme --timeout=120s
+          kubectl rollout status deployment/listenme-frontend -n listenme --timeout=180s
 
       - name: Apply ingress
         run: kubectl apply -f k8s/ingress.yaml

@@ -18,6 +18,8 @@ bashaws configure
 
 STEP 3 — Create state bucket (one time, Git Bash)
 aws s3 mb s3://listenme-terraform-state --region us-east-1
+
+
 aws s3api put-bucket-versioning \
   --bucket listenme-terraform-state \
   --versioning-configuration Status=Enabled
